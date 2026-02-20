@@ -15,7 +15,8 @@ import {
   Twitter, 
   Info,
   CheckCircle2,
-  AlertTriangle
+  AlertTriangle,
+  CloudDownload
 } from 'lucide-react';
 import { VideoPlayer } from './components/VideoPlayer';
 import { Terminal } from './components/Terminal';
@@ -32,6 +33,7 @@ export default function App() {
   const [urlInput, setUrlInput] = useState('');
   const [activeUrl, setActiveUrl] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [metrics, setMetrics] = useState({
     qualities: 0,
@@ -109,6 +111,43 @@ export default function App() {
     URL.revokeObjectURL(url);
     
     addLog('Analysis report exported successfully', 'success');
+  };
+
+  const handleDownloadLecture = async () => {
+    if (!activeUrl) return;
+    
+    setIsDownloading(true);
+    addLog('Requesting backend download process...', 'info');
+    
+    try {
+      const response = await fetch('/api/analyze-download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: activeUrl })
+      });
+      
+      const data = await response.json();
+      
+      if (response.ok) {
+        addLog(`Backend Status: ${data.status}`, 'success');
+        addLog(data.message, 'info');
+        
+        // Simulate a file download trigger
+        setTimeout(() => {
+          addLog('Lecture segments processed. Generating download link...', 'info');
+          setTimeout(() => {
+            addLog('Download ready: lecture_export.mp4 (Simulated)', 'success');
+            setIsDownloading(false);
+          }, 1500);
+        }, 1000);
+      } else {
+        addLog(`Backend Error: ${data.error}`, 'error');
+        setIsDownloading(false);
+      }
+    } catch (error) {
+      addLog('Failed to connect to backend downloader.', 'error');
+      setIsDownloading(false);
+    }
   };
 
   return (
@@ -193,6 +232,26 @@ export default function App() {
                   )}
                   FETCH PLAYLIST
                 </button>
+                
+                <AnimatePresence>
+                  {activeUrl && (
+                    <motion.button
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      onClick={handleDownloadLecture}
+                      disabled={isDownloading}
+                      className="w-full bg-white/5 border border-white/10 py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-white/10 transition-all disabled:opacity-50"
+                    >
+                      {isDownloading ? (
+                        <Activity className="w-5 h-5 animate-spin text-neon" />
+                      ) : (
+                        <CloudDownload className="w-5 h-5 text-neon" />
+                      )}
+                      DOWNLOAD LECTURE (MP4)
+                    </motion.button>
+                  )}
+                </AnimatePresence>
               </div>
 
               {/* Status Bar */}
