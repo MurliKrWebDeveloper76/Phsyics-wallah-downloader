@@ -1,0 +1,5 @@
+{
+  "name": "StreamScope - HLS Playlist Analyzer",
+  "description": "A modern cyber-tech dashboard for analyzing and previewing HLS streams with real-time metrics and terminal logs.",
+  "requestFramePermissions": []
+}
