@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import axios from "axios";
 import path from "path";
 import { fileURLToPath } from "url";
+import { spawn } from "child_process";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,8 +22,48 @@ async function startServer() {
       return res.status(400).json({ error: "URL is required" });
     }
 
+    // Spawn Python process
+    const pythonProcess = spawn('python3', [path.join(__dirname, 'backend/python/analyze.py'), url]);
+    
+    let pythonData = "";
+    let pythonError = "";
+
+    pythonProcess.stdout.on('data', (data) => {
+      pythonData += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      pythonError += data.toString();
+    });
+
+    pythonProcess.on('close', (code) => {
+      if (code !== 0) {
+        console.error(`Python script exited with code ${code}`);
+        console.error(`Python error: ${pythonError}`);
+        // Fallback to Node.js logic if Python fails (e.g., python3 not installed)
+        return handleNodeFallback(url, res);
+      }
+
+      try {
+        // Parse the last line of JSON output from Python
+        const lines = pythonData.trim().split('\n');
+        const lastLine = lines[lines.length - 1];
+        const result = JSON.parse(lastLine);
+        
+        res.json({
+          status: "success",
+          backend: "Python",
+          ...result
+        });
+      } catch (e) {
+        console.error("Failed to parse Python output:", e);
+        handleNodeFallback(url, res);
+      }
+    });
+  });
+
+  async function handleNodeFallback(url: string, res: any) {
     try {
-      // Attempt to fetch the manifest to verify it's reachable from the backend
       const response = await axios.get(url, {
         timeout: 5000,
         headers: {
@@ -35,9 +76,10 @@ async function startServer() {
 
       res.json({
         status: "success",
+        backend: "Node.js (Fallback)",
         type: isMaster ? "Master Playlist" : isMedia ? "Media Playlist" : "Unknown",
         contentLength: response.headers['content-length'] || "unknown",
-        message: "Backend successfully reached the stream source. Direct MP4 download of HLS streams requires server-side transcoding (FFmpeg), which is currently processing in 'Simulated Mode' for this demo."
+        message: "Analysis completed by Node.js backend."
       });
     } catch (error: any) {
       res.status(500).json({ 
@@ -45,7 +87,7 @@ async function startServer() {
         details: error.message 
       });
     }
-  });
+  }
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
